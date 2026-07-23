@@ -1,29 +1,21 @@
 import { defineHook } from "@directus/extensions-sdk";
 import axios from 'axios';
+import { fileURLToPath } from "node:url";
+
+import { getWatermarkOverlays } from "./watermarks.js";
+
+const WATERMARK_PATHS = {
+  center: fileURLToPath(new URL("../assets/watermarks/watermark-center.svg", import.meta.url)),
+  corner: fileURLToPath(new URL("../assets/watermarks/watermark-corner.svg", import.meta.url)),
+};
 
 export default defineHook(({ action }, { services, logger, env }) => {
   const { AssetsService, FilesService } = services;
   const QUALITY = 75;
   const rawMaxSize = Number(env.EXTENSIONS_SANE_IMAGE_SIZE_MAXSIZE);
   const MAX_SIZE = Number.isFinite(rawMaxSize) && rawMaxSize > 0 ? Math.floor(rawMaxSize) : 1920;
-  const WATERMARK_BASE_PATH = '/directus/extensions/directus-extension-sane-image-size/';
   const THUMBNAIL_BASE_URL = 'https://bluehorizoncondospattaya.com/assets';
   const THUMBNAIL_PRESETS = ['carousel'];
-
-  const WATERMARKS = [
-    { filename: 'watermark-1920.png', width: 1920, height: 1440 },
-    { filename: 'watermark-1920-1080.png', width: 1920, height: 1080 },
-    { filename: 'watermark-1900.png', width: 1900, height: 1425 },
-    { filename: 'watermark-1850.png', width: 1850, height: 1387 },
-    { filename: 'watermark-1800.png', width: 1800, height: 1350 },
-    { filename: 'watermark-1700.png', width: 1700, height: 1275 },
-    { filename: 'watermark-1600.png', width: 1600, height: 1200 },
-    { filename: 'watermark-1500.png', width: 1500, height: 1125 },
-    { filename: 'watermark-1400.png', width: 1400, height: 1050 },
-    { filename: 'watermark-1200.png', width: 1200, height: 900 },
-    { filename: 'watermark-1000.png', width: 1000, height: 750 },
-    { filename: 'watermark-800.png', width: 800, height: 600 },
-  ];
   const queue = [];
   let isProcessing = false;
 
@@ -70,9 +62,13 @@ export default defineHook(({ action }, { services, logger, env }) => {
         return;
       }
       const resizedDimensions = calculateResizedDimensions(originalWidth, originalHeight, MAX_SIZE);
-      const suitableWatermark = getSuitableWatermark(resizedDimensions.width, resizedDimensions.height);
+      const watermarkOverlays = getWatermarkOverlays(
+        resizedDimensions.width,
+        resizedDimensions.height,
+        WATERMARK_PATHS,
+      );
       const effectiveType = typeof payload.type === "string" ? payload.type : fileData.type;
-      const combinedTransformation = getCombinedTransformation(effectiveType, suitableWatermark);
+      const combinedTransformation = getCombinedTransformation(effectiveType, watermarkOverlays);
 
       // Skip processing if transformation is not applicable
       if (!combinedTransformation) {
@@ -201,36 +197,7 @@ export default defineHook(({ action }, { services, logger, env }) => {
     }
   }
 
-  function getSuitableWatermark(imageWidth, imageHeight) {
-    let bestWatermark = null;
-    let bestArea = 0;
-
-    for (const watermark of WATERMARKS) {
-      if (watermark.width <= imageWidth && watermark.height <= imageHeight) {
-        const area = watermark.width * watermark.height;
-        if (area > bestArea) {
-          bestArea = area;
-          bestWatermark = watermark;
-        }
-      }
-    }
-
-    if (bestWatermark) {
-      // We don't verify watermark existence directly anymore
-      // Instead, we'll handle any errors that occur when using the watermark
-      const watermarkPath = WATERMARK_BASE_PATH + bestWatermark.filename;      
-      return {
-        ...bestWatermark,
-        path: watermarkPath,
-        useWidth: bestWatermark.width,
-        useHeight: bestWatermark.height
-      };
-    }
-
-    return null;
-  }
-
-  function getCombinedTransformation(type, watermark) {
+  function getCombinedTransformation(type, watermarkOverlays) {
     if (typeof type !== "string") {
       return undefined;
     }
@@ -240,11 +207,8 @@ export default defineHook(({ action }, { services, logger, env }) => {
         ['avif', { quality: QUALITY }]
       ];
       
-      if (watermark) {
-        transforms.push(['composite', [{
-          input: watermark.path,
-          gravity: 'center'
-        }]]);
+      if (watermarkOverlays.length > 0) {
+        transforms.push(['composite', watermarkOverlays]);
       }
 
       return {

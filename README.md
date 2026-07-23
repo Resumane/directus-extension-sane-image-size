@@ -8,7 +8,7 @@ when possible, and triggers thumbnail generation.
 Features:
 
 - Format conversion to AVIF
-- Watermarking (centered)
+- Dynamic center and bottom-right watermarking
 - Automatic thumbnail warm-up
 
 ## Installation
@@ -35,7 +35,7 @@ On each `files.upload` event, the extension processes one file at a time:
 - Skips unsupported types (only `jpg`, `jpeg`, `png`, `webp` are transformed).
 - Resizes to fit within `MAXSIZE` while keeping aspect ratio (no enlargement).
 - Converts to AVIF at a fixed quality of `75`.
-- Applies a centered watermark if a suitable watermark image is available.
+- Applies dynamically scaled center and bottom-right watermarks to every valid image size.
 - Re-uploads the file (same file ID) with updated metadata and `optimized: true`.
 - Waits/throttles between files (intentional to keep a small server responsive).
 - Warms a thumbnail preset (`carousel`) in WebP and AVIF.
@@ -49,7 +49,8 @@ Environment variables:
 Hardcoded settings in `src/index.js`:
 
 - Quality is fixed to `75` (AVIF).
-- Watermarks are loaded from `/directus/extensions/directus-extension-sane-image-size/`.
+- Watermarks are loaded relative to the extension from `assets/watermarks/`.
+- Watermark sizing and placement ratios are defined in `src/watermarks.js`.
 - Thumbnail warm-up hits `https://bluehorizoncondospattaya.com/assets` with preset `carousel`.
 - Processing is single-file with throttled waits between items.
 
